@@ -411,7 +411,6 @@ export default function Terminal() {
 
         // Try to decode the TokenLaunched event
         // Event signature: TokenLaunched(address indexed tokenAddress, address indexed poolAddress, string name, string symbol)
-        const eventAbi = LaunchpadABI.find(e => e.type === 'event' && e.name === 'TokenLaunched') as const
         
         for (const log of eventLogs) {
           try {
