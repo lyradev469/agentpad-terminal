@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useAccount, useChainId, useConnect, useDisconnect, usePublicClient, useWalletClient, useReadContract, useWriteContract } from 'wagmi'
 import { injected, walletConnect } from 'wagmi/connectors'
-import { parseAbi, encodeFunctionData, parseLog } from 'viem'
+import { parseAbi, encodeFunctionData } from 'viem'
 
 // ──── CONTRACT ABIs ────
 const LaunchpadABI = [
@@ -414,16 +414,14 @@ export default function Terminal() {
         
         for (const log of eventLogs) {
           try {
-            const parsedLog = parseLog({
-              abi: LaunchpadABI as any,
-              address: log.address,
-              topics: log.topics as `0x${string}`[],
-              data: log.data,
-            })
+            // Manual decoding of TokenLaunched event
+            // Event: TokenLaunched(address indexed tokenAddress, address indexed poolAddress, string name, string symbol)
+            // Topics: [eventSelector, tokenAddress, poolAddress, nameHash, symbolHash]
+            // For indexed addresses, topics[1] = tokenAddress, topics[2] = poolAddress
             
-            if (parsedLog?.args) {
-              tokenAddress = parsedLog.args.tokenAddress || tokenAddress
-              poolAddress = parsedLog.args.poolAddress || poolAddress
+            if (log.topics.length >= 3) {
+              tokenAddress = log.topics[1] as `0x${string}`
+              poolAddress = log.topics[2] as `0x${string}`
               break
             }
           } catch (e) {
