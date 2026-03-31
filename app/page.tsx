@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useAccount, useChainId, useConnect, useDisconnect, usePublicClient, useWalletClient, useReadContract, useWriteContract } from 'wagmi'
 import { injected, walletConnect } from 'wagmi/connectors'
-import { parseAbi, encodeFunctionData } from 'viem'
+import { parseAbi, encodeFunctionData, parseLog } from 'viem'
 
 // ──── CONTRACT ABIs ────
 const LaunchpadABI = [
@@ -30,6 +30,16 @@ const LaunchpadABI = [
     inputs: [{ name: '', type: 'uint256' }],
     outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
+  },
+  {
+    type: 'event',
+    name: 'TokenLaunched',
+    inputs: [
+      { name: 'tokenAddress', type: 'address', indexed: true },
+      { name: 'poolAddress', type: 'address', indexed: true },
+      { name: 'name', type: 'string', indexed: false },
+      { name: 'symbol', type: 'string', indexed: false },
+    ],
   },
 ] as const
 
@@ -386,9 +396,58 @@ export default function Terminal() {
       // Wait for receipt
       addOutput(['> Waiting for confirmation...', '> [~30s]'])
 
-      await new Promise(resolve => setTimeout(resolve, 30000))
+      const receipt = await publicClient!.waitForTransactionReceipt({ hash })
 
-      // Fetch result (in real impl, decode events from receipt)
+      addOutput(['> ✅ Transaction confirmed'])
+
+      // Parse logs to extract TokenLaunched event
+      let tokenAddress: `0x${string}` | null = null
+      let poolAddress: `0x${string}` | null = null
+
+      try {
+        const eventLogs = receipt.logs.filter((log): log is typeof log & { topics: readonly `0x${string}`[] } => 
+          log.address.toLowerCase() === CONFIG.launcher.toLowerCase()
+        )
+
+        // Try to decode the TokenLaunched event
+        // Event signature: TokenLaunched(address indexed tokenAddress, address indexed poolAddress, string name, string symbol)
+        const eventAbi = LaunchpadABI.find(e => e.type === 'event' && e.name === 'TokenLaunched') as const
+        
+        for (const log of eventLogs) {
+          try {
+            const parsedLog = parseLog({
+              abi: LaunchpadABI as any,
+              address: log.address,
+              topics: log.topics as `0x${string}`[],
+              data: log.data,
+            })
+            
+            if (parsedLog?.args) {
+              tokenAddress = parsedLog.args.tokenAddress || tokenAddress
+              poolAddress = parsedLog.args.poolAddress || poolAddress
+              break
+            }
+          } catch (e) {
+            // Continue if parsing fails
+          }
+        }
+
+        // Fallback: try to decode manually if parseLog fails
+        if (!tokenAddress && eventLogs.length > 0) {
+          // Topic 0: event selector, Topic 1: tokenAddress, Topic 2: poolAddress
+          const firstLog = eventLogs[0]
+          if (firstLog.topics.length >= 3) {
+            tokenAddress = firstLog.topics[1] as `0x${string}`
+            poolAddress = firstLog.topics[2] as `0x${string}`
+          }
+        }
+      } catch (e) {
+        addOutput(['> ⚠️ Could not parse deployment events (using defaults)'])
+      }
+
+      // Use fallback addresses if parsing failed
+      const finalTokenAddress = tokenAddress || CONFIG.launcher
+      const finalPoolAddress = poolAddress || CONFIG.launcher
       addCommand('launch', [
         '> ──────────────────────────────────────────',
         '> ✅ LAUNCH COMPLETE',
@@ -399,16 +458,21 @@ export default function Terminal() {
         `> Image: ${imageUrl ? '✅ Uploaded' : '⚠ Not provided'}`,
         `> Image URL: ${imageUrl || '-'}`,
         `> Tx Hash: ${hash}`,
-        `> Block: ~pending`,
-        `> Gas Used: ~380000`,
+        `> Block: ${receipt.blockNumber}`,
+        `> Gas Used: ${receipt.gasUsed.toString()}`,
         '> ',
         '> 📊 Deployed Contracts:',
-        `>   Token: ${shortAddr(CONFIG.launcher)}`,
-        `>   Pool: ${shortAddr(CONFIG.launcher)}`,
+        `>   Token: ${tokenAddress ? shortAddr(tokenAddress) : shortAddr(finalTokenAddress)} ${tokenAddress ? '✅' : '⚠️'}`,
+        `>   Pool: ${poolAddress ? shortAddr(poolAddress) : shortAddr(finalPoolAddress)} ${poolAddress ? '✅' : '⚠️'}`,
         `>   Locker: ${shortAddr(CONFIG.locker)}`,
+        '> ',
+        '💡 Full addresses:',
+        `>   Token: ${finalTokenAddress}`,
+        `>   Pool: ${finalPoolAddress}`,
         '> ',
         '> 🔒 LP Positions locked in LpLockerv2',
         '> Run "positions <token>" to view',
+        tokenAddress || poolAddress ? '' : '> ⚠️ Note: Event parsing failed, using launcher address as fallback',
       ])
     } catch (e) {
       addCommand('launch', [
@@ -416,7 +480,7 @@ export default function Terminal() {
         `   ${imageUrl ? 'Check image URL' : 'Check parameters'}`,
       ], true)
     }
-  }, [writeContractAsync, isConnected, address, imageUri, publicClient])
+  }, [writeContractAsync, isConnected, address, imageUri, publicClient, addCommand, addOutput])
 
   // Execute claim
   const executeClaim = useCallback(async (tokenAddr: `0x${string}`) => {
