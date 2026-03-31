@@ -381,13 +381,13 @@ export default function Terminal() {
     addOutput(['> Executing launchTokenAndPool()', '> [pending...]', '> Sending transaction...'])
 
     try {
-      const imageUri = imageUrl || imageUri || ''
+      const finalImageUri = imageUrl || imageUri || ''
 
       const hash = await writeContractAsync({
         address: CONFIG.launcher as `0x${string}`,
         abi: LaunchpadABI,
         functionName: 'launchTokenAndPool',
-        args: [name, symbol, CONFIG.locker as `0x${string}`, BigInt(numPositions), imageUri],
+        args: [name, symbol, CONFIG.locker as `0x${string}`, BigInt(numPositions), finalImageUri],
         account: address,
       } as any)
 
