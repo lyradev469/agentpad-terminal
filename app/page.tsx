@@ -54,11 +54,10 @@ interface CommandEntry {
 }
 
 interface LaunchState {
-  step: 'idle' | 'name' | 'symbol' | 'positions' | 'image' | 'confirm' | 'deploying' | 'done'
+  step: 'idle' | 'name' | 'symbol' | 'confirm' | 'deploying' | 'done'
   data: {
     name: string
     symbol: string
-    positions: number
     imageUri: string | null
   }
 }
@@ -69,7 +68,7 @@ export default function Terminal() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [launchState, setLaunchState] = useState<LaunchState>({
     step: 'idle',
-    data: { name: '', symbol: '', positions: 0, imageUri: null },
+    data: { name: '', symbol: '', imageUri: null },
   })
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -83,6 +82,9 @@ export default function Terminal() {
   const { disconnect } = useDisconnect()
   const publicClient = usePublicClient({ chainId: 42431 })
   const { writeContractAsync } = useWriteContract()
+
+  // Default positions if not specified
+  const DEFAULT_POSITIONS = 5
 
   // Auto-focus
   useEffect(() => {
@@ -118,7 +120,7 @@ export default function Terminal() {
 
   const shortAddr = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`
 
-  // ──── LAUNCH FLOW PROMPTS ────
+  // ──── LAUNCH FLOW PROMPTS (No positions) ────
   const handlePromptResponse = (value: string) => {
     const { step, data } = launchState
 
@@ -134,41 +136,26 @@ export default function Terminal() {
 
       case 'symbol':
         setLaunchState({
-          step: 'positions',
+          step: 'confirm',
           data: { ...data, symbol: value },
         })
         addOutput([`> Token symbol: ${value}`])
-        addOutput(['> Enter number of positions (1-10):'])
-        break
-
-      case 'positions': {
-        const num = parseInt(value)
-        if (isNaN(num) || num < 1 || num > 10) {
-          addOutput(['❌ Invalid. Enter 1-10:'])
-          return
-        }
-        setLaunchState({
-          step: 'confirm',
-          data: { ...data, positions: num },
-        })
-        addOutput([`> Positions: ${num}`])
         addOutput([
           '> ─────────────────────────────',
           `> Confirm launch?`,
           `>   Name: ${data.name}`,
           `>   Symbol: ${value}`,
-          `>   Positions: ${num}`,
+          `>   Positions: ${DEFAULT_POSITIONS} (default)`,
           '> > Yes/No:',
         ])
         break
-      }
 
       case 'confirm':
         if (value.toLowerCase() === 'yes' || value.toLowerCase() === 'y') {
-          executeLaunch(data.name, data.symbol, data.positions)
+          executeLaunch(data.name, data.symbol, DEFAULT_POSITIONS)
         } else {
           addOutput(['> Launch cancelled.'])
-          setLaunchState({ step: 'idle', data: { name: '', symbol: '', positions: 0, imageUri: null } })
+          setLaunchState({ step: 'idle', data: { name: '', symbol: '', imageUri: null } })
         }
         break
     }
@@ -176,8 +163,8 @@ export default function Terminal() {
 
   const executeLaunch = async (name: string, symbol: string, numPositions: number) => {
     if (!isConnected) {
-      addOutput(['❌ Wallet not connected. Run "connect" first.'])
-      setLaunchState({ step: 'idle', data: { name: '', symbol: '', positions: 0, imageUri: null } })
+      addOutput(['❌ Wallet not connected. Click "Connect Wallet" button.'])
+      setLaunchState({ step: 'idle', data: { name: '', symbol: '', imageUri: null } })
       return
     }
 
@@ -213,10 +200,10 @@ export default function Terminal() {
         '> Type "help" for commands',
       ])
 
-      setLaunchState({ step: 'idle', data: { name: '', symbol: '', positions: 0, imageUri: null } })
+      setLaunchState({ step: 'idle', data: { name: '', symbol: '', imageUri: null } })
     } catch (e) {
       addOutput([`❌ Launch failed: ${(e as Error).message}`])
-      setLaunchState({ step: 'idle', data: { name: '', symbol: '', positions: 0, imageUri: null } })
+      setLaunchState({ step: 'idle', data: { name: '', symbol: '', imageUri: null } })
     } finally {
       setIsProcessing(false)
     }
@@ -264,31 +251,11 @@ export default function Terminal() {
           break
 
         case 'connect':
-          if (!connectors || connectors.length === 0) {
-            addCommand(trimmed, ['❌ No wallets available'], true)
-            break
-          }
-          addOutput(['> Finding wallet...'])
-          const injectedConn = connectors.find(c => c.type?.includes('injected')) || connectors[0]
-          await connect({ connector: injectedConn })
-          addCommand('connect', [
-            '> ─────────────────────────────────',
-            '✅ WALLET CONNECTED',
-            '> ─────────────────────────────────',
-            `> ${address ? shortAddr(address) : 'Unknown'}`,
-            `> Chain: ${chainId}`,
-            '>',
-            'Type "launch" to deploy a token',
-          ])
+          addCommand(trimmed, ['> Use the "Connect Wallet" button above.'], true)
           break
 
         case 'disconnect':
-          if (!isConnected) {
-            addCommand(trimmed, ['⚠ Wallet not connected'], true)
-            break
-          }
-          await disconnect()
-          addCommand('disconnect', ['✅ Wallet disconnected'])
+          addCommand(trimmed, ['> Use the "Disconnect" button above.'], true)
           break
 
         case 'status':
@@ -377,13 +344,46 @@ export default function Terminal() {
       className="min-h-screen bg-black text-green-400 p-6 font-mono text-sm overflow-y-auto"
       onClick={() => inputRef.current?.focus()}
     >
+      {/* Terminal header with wallet button */}
+      <div className="flex justify-between items-center mb-6 pb-4 border-b border-green-800">
+        <div>
+          <h1 className="text-2xl text-green-500 font-bold">AgentPad Terminal v1.0</h1>
+          <p className="text-xs text-green-600 mt-1">Network: Tempo Moderate (42431)</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className={`text-sm ${isConnected ? 'text-green-500' : 'text-yellow-500'}`}>
+              {isConnected ? '● Wallet Connected' : '○ Wallet Disconnected'}
+            </p>
+            {isConnected && address && (
+              <p className="text-xs text-green-600">{shortAddr(address)}</p>
+            )}
+          </div>
+          {!isConnected ? (
+            <button
+              onClick={async () => {
+                const injectedConn = connectors.find(c => c.type?.includes('injected')) || connectors[0]
+                if (injectedConn) await connect({ connector: injectedConn })
+              }}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-mono text-sm transition"
+            >
+              🔗 Connect Wallet
+            </button>
+          ) : (
+            <button
+              onClick={() => disconnect()}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-mono text-sm transition"
+            >
+              🔓 Disconnect
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Welcome message */}
       {history.length === 0 && (
         <div className="text-green-500 mb-6">
           <p>AgentPad Terminal v1.0</p>
-          <p>Network: Tempo Moderate (42431)</p>
-          <p>Wallet: {isConnected ? '✅ Connected' : '⚠ Disconnected'}</p>
-          {isConnected && address && <p>Address: {shortAddr(address)}</p>}
           <br />
           <p className="text-green-400">Type <span className="text-green-200">'help'</span> to begin</p>
           <br />
@@ -416,9 +416,7 @@ export default function Terminal() {
           }{
             launchState.step === 'symbol' && 'Enter token symbol:'
           }{
-            launchState.step === 'positions' && 'Enter number of positions (1-10):'
-          }{
-            launchState.step === 'confirm' && '> Yes/No:'
+            launchState.step === 'confirm' && 'Confirm launch? (Yes/No):'
           }{
             launchState.step === 'deploying' && 'Deploying...'
           }
