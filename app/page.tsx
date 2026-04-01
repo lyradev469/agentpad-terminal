@@ -342,7 +342,7 @@ export default function Terminal() {
 
   // Get pending rewards
   const getPendingRewards = useCallback(async (tokenAddr: `0x${string}`, who: `0x${string}`) => {
-    if (!publicClient || !address) return 0n
+    if (!publicClient || !address) return BigInt(0)
 
     try {
       const rewards = await publicClient.readContract({
@@ -354,7 +354,7 @@ export default function Terminal() {
       return rewards as bigint
     } catch (e) {
       console.error('Failed to get rewards:', e)
-      return 0n
+      return BigInt(0)
     }
   }, [publicClient, address])
 
@@ -499,7 +499,7 @@ export default function Terminal() {
     try {
       const rewards = await getPendingRewards(tokenAddr, address!)
 
-      if (rewards === 0n) {
+      if (rewards === BigInt(0)) {
         addCommand('claim', [
           '❌ No pending rewards for this token',
           `   Token: ${tokenAddr}`,
