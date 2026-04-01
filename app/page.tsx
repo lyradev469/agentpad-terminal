@@ -891,12 +891,28 @@ export default function Terminal() {
               </div>
             )}
           </div>
-          {!isConnected ? (
+          {!isConnected && connectors.length > 0 ? (
             <button
-              onClick={() => connect({ connector: connectors[0] })}
+              onClick={async () => {
+                try {
+                  // Find an injected connector first, fallback to any available
+                  const injectedConnector = connectors.find(c => c.type?.includes('injected') || c.id?.includes('injected'))
+                  await connect({ connector: injectedConnector || connectors[0] })
+                } catch (e) {
+                  console.error('Connection error:', e)
+                  alert('Connection failed. Please try again or use a different wallet.')
+                }
+              }}
               className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-mono text-sm transition"
             >
               🔗 Connect Wallet
+            </button>
+          ) : !isConnected ? (
+            <button
+              disabled
+              className="px-4 py-2 bg-gray-600 text-gray-400 rounded font-mono text-sm cursor-not-allowed"
+            >
+              🔗 No Wallet Available
             </button>
           ) : (
             <button
