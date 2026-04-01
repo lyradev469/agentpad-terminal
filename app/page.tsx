@@ -152,6 +152,7 @@ export default function Terminal() {
   const publicClient = usePublicClient({ chainId: 42431 })
   const { writeContractAsync } = useWriteContract()
   const { connect, connectors, error: connectError } = useConnect()
+  const { disconnect } = useDisconnect()
 
   // Auto-focus on mount
   useEffect(() => {
