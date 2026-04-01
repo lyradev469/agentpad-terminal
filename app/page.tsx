@@ -763,10 +763,10 @@ export default function Terminal() {
             let connectorToUse
             if (!provider || provider === 'injected') {
               // Find injected connector (MetaMask, etc.)
-              connectorToUse = connectors.find(c => c.type === 'injected')
+              connectorToUse = connectors.find(c => c.type === 'injected' || c.id.includes('injected'))
             } else if (provider === 'walletconnect') {
               // Find WalletConnect connector
-              connectorToUse = connectors.find(c => c.id === 'walletConnect')
+              connectorToUse = connectors.find(c => c.type === 'walletConnect' || c.id.includes('walletConnect') || c.id.includes('WalletConnect'))
             } else {
               addCommand('connect', [
                 `❌ Unknown provider: ${provider}`,
@@ -776,10 +776,17 @@ export default function Terminal() {
               break
             }
 
+            // Fallback: if no specific connector found, use the first available one
+            if (!connectorToUse && connectors.length > 0) {
+              addOutput(['> Using default available connector...'])
+              connectorToUse = connectors[0]
+            }
+
             if (!connectorToUse) {
               addCommand('connect', [
-                '❌ Connector not found',
-                '   Please refresh the page and try again',
+                '❌ No connectors available',
+                '   Please ensure wagmi config is properly initialized',
+                '   Try refreshing the page',
               ], true)
               break
             }
