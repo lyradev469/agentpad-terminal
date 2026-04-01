@@ -3,6 +3,7 @@
 import { WagmiProvider, createConfig, http } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { mainnet, base } from 'wagmi/chains'
+import { injected, walletConnect } from 'wagmi/connectors'
 
 // Tempo network configuration
 const tempo = {
@@ -22,6 +23,12 @@ const tempo = {
 
 const config = createConfig({
   chains: [tempo, mainnet, base],
+  connectors: [
+    injected({ target: 'metaMask' }),
+    walletConnect({
+      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '85be66e6169307dc900bc2337d69d10a',
+    }),
+  ],
   transports: {
     [tempo.id]: http(),
     [mainnet.id]: http(),
