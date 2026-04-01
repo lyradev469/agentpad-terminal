@@ -930,7 +930,7 @@ export default function Terminal() {
                 <p className="text-yellow-600 mt-1">Commands like launch, claim, positions require wallet authentication</p>
               </>
             )}
-            <p className={isConnected ? 'text-green-600 mt-2' : 'text-yellow-600 mt-2'}>> drag & drop images to upload to IPFS</p>
+            <p className={isConnected ? 'text-green-600 mt-2' : 'text-yellow-600 mt-2'}>{'>'} drag & drop images to upload to IPFS</p>
             <br />
           </div>
         )}
